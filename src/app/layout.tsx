@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import Navbar from "@/components/home/Navbar";
+import Footer from "@/components/home/Footer";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -33,9 +35,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${fraunces.variable} ${inter.variable} ${plexMono.variable} font-body antialiased`}
+        className={`${fraunces.variable} ${inter.variable} ${plexMono.variable} font-body min-h-screen bg-parchment text-ink antialiased`}
       >
+        <Navbar />
         {children}
+        <Footer />
       </body>
     </html>
   );
