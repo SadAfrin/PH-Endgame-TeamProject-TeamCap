@@ -3,21 +3,34 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LoginData, FormErrors, Role } from "@/types/auth";
+import { signIn } from "next-auth/react";
 
-const roles: Role[] = ["student", "teacher", "parent", "admin"];
+type Role = "admin" | "teacher" | "student" | "parent";
+
+const roles: { label: string; value: Role }[] = [
+  { label: "Admin", value: "admin" },
+  { label: "Teacher", value: "teacher" },
+  { label: "Student", value: "student" },
+  { label: "Parent", value: "parent" },
+];
+
+interface Errors {
+  email?: string;
+  password?: string;
+  form?: string;
+}
 
 export default function LoginForm() {
   const router = useRouter();
+  const [role, setRole] = useState<Role>("student");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("student");
-  const [showPass, setShowPass] = useState(false);
-  const [errors, setErrors] = useState<FormErrors>({});
+  const [errors, setErrors] = useState<Errors>({});
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const checkForm = () => {
-    const newErrors: FormErrors = {};
+    const newErrors: Errors = {};
 
     if (!email) newErrors.email = "Email is required";
     else if (!/^\S+@\S+\.\S+$/.test(email)) newErrors.email = "Enter a valid email";
@@ -44,18 +57,17 @@ export default function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role } as LoginData),
+        body: JSON.stringify({ email, password, role }),
       });
 
       const data = await res.json();
 
       if (!data.success) {
-        setErrors({ form: data.message || "Login failed" });
+        setErrors({ form: data.message || "Invalid email or password" });
         setLoading(false);
         return;
       }
 
-      // redirect based on role
       if (role === "admin") router.push("/dashboard/admin");
       else if (role === "teacher") router.push("/dashboard/teacher");
       else if (role === "parent") router.push("/dashboard/parent");
@@ -68,35 +80,44 @@ export default function LoginForm() {
     }
   };
 
+const handleGoogleLogin = async () => {
+  setGoogleLoading(true);
+  await signIn("google", { callbackUrl: `/dashboard/${role}` });
+};
   return (
-    <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
-      <h1 className="text-2xl font-semibold text-slate-900 text-center">Welcome back</h1>
-      <p className="text-sm text-slate-500 text-center mt-1 mb-6">Sign in to continue</p>
+    <div className="w-full max-w-md">
+      <h1 className="font-serif text-4xl text-[#1f2a44] mb-1">EduJira</h1>
+
+      <h2 className="font-serif text-3xl text-[#1f2a44] mt-8">Sign in</h2>
+      <p className="text-[#6b6459] mt-1 mb-6">Choose your role, then enter your details.</p>
 
       {errors.form && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-md px-4 py-3 mb-4">
           {errors.form}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">I am a</label>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500"
+      {/* Role tabs */}
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {roles.map((r) => (
+          <button
+            key={r.value}
+            type="button"
+            onClick={() => setRole(r.value)}
+            className={`px-5 py-2 rounded-md border text-sm font-medium transition ${
+              role === r.value
+                ? "bg-[#2f5233] border-[#2f5233] text-white"
+                : "bg-transparent border-[#d8d0bd] text-[#1f2a44] hover:border-[#1f2a44]"
+            }`}
           >
-            {roles.map((r) => (
-              <option key={r} value={r}>
-                {r.charAt(0).toUpperCase() + r.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
+            {r.label}
+          </button>
+        ))}
+      </div>
 
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+          <label className="block text-sm text-[#1f2a44] mb-1.5">Email</label>
           <input
             type="email"
             value={email}
@@ -104,63 +125,83 @@ export default function LoginForm() {
               setEmail(e.target.value);
               if (errors.email) setErrors({ ...errors, email: undefined });
             }}
-            placeholder="you@school.edu"
-            className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-              errors.email ? "border-red-400 focus:ring-red-100" : "border-slate-300 focus:ring-indigo-100 focus:border-indigo-500"
+            placeholder="name@school.edu"
+            className={`w-full bg-white border rounded-md px-4 py-3 text-[#1f2a44] placeholder:text-[#a8a094] focus:outline-none focus:ring-1 ${
+              errors.email ? "border-red-400 focus:ring-red-300" : "border-[#d8d0bd] focus:ring-[#1f2a44]"
             }`}
           />
           {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email}</p>}
         </div>
 
         <div>
-          <div className="flex justify-between items-center mb-1">
-            <label className="block text-sm font-medium text-slate-700">Password</label>
-            <Link href="/forgot-password" className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">
+          <div className="flex justify-between items-center mb-1.5">
+            <label className="block text-sm text-[#1f2a44]">Password</label>
+            <Link href="/forgot-password" className="text-xs text-[#1f2a44] font-medium hover:underline">
               Forgot password?
             </Link>
           </div>
-          <div className="relative">
-            <input
-              type={showPass ? "text" : "password"}
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (errors.password) setErrors({ ...errors, password: undefined });
-              }}
-              placeholder="••••••••"
-              className={`w-full border rounded-lg px-3 py-2 pr-14 text-sm focus:outline-none focus:ring-2 ${
-                errors.password ? "border-red-400 focus:ring-red-100" : "border-slate-300 focus:ring-indigo-100 focus:border-indigo-500"
-              }`}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPass(!showPass)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-slate-700"
-            >
-              {showPass ? "Hide" : "Show"}
-            </button>
-          </div>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (errors.password) setErrors({ ...errors, password: undefined });
+            }}
+            placeholder="Enter your password"
+            className={`w-full bg-white border rounded-md px-4 py-3 text-[#1f2a44] placeholder:text-[#a8a094] focus:outline-none focus:ring-1 ${
+              errors.password ? "border-red-400 focus:ring-red-300" : "border-[#d8d0bd] focus:ring-[#1f2a44]"
+            }`}
+          />
           {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-lg px-4 py-2.5 disabled:opacity-60"
+          className="w-full bg-[#1f2a44] hover:bg-[#161d31] text-white font-semibold rounded-md py-3.5 transition disabled:opacity-60"
         >
-          {loading ? "Signing in..." : "Sign in"}
+          {loading ? "Signing in..." : `Sign in as ${role.charAt(0).toUpperCase() + role.slice(1)}`}
         </button>
       </form>
 
-      <div className="flex items-center gap-3 my-5">
-        <div className="flex-1 h-px bg-slate-200" />
-        <span className="text-xs text-slate-400">or</span>
-        <div className="flex-1 h-px bg-slate-200" />
+      {/* Divider */}
+      <div className="flex items-center gap-3 my-6">
+        <div className="flex-1 h-px bg-[#d8d0bd]" />
+        <span className="text-xs text-[#a8a094]">or continue with</span>
+        <div className="flex-1 h-px bg-[#d8d0bd]" />
       </div>
 
-      <p className="text-sm text-center text-slate-600">
+      {/* Google Sign-in */}
+      <button
+        type="button"
+        onClick={handleGoogleLogin}
+        disabled={googleLoading}
+        className="w-full flex items-center justify-center gap-3 bg-white border border-[#d8d0bd] hover:border-[#1f2a44] text-[#1f2a44] font-medium rounded-md py-3 transition disabled:opacity-60"
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.88 2.7-6.62z"
+            fill="#4285F4"
+          />
+          <path
+            d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.81.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.96v2.33A9 9 0 0 0 9 18z"
+            fill="#34A853"
+          />
+          <path
+            d="M3.95 10.7A5.4 5.4 0 0 1 3.68 9c0-.59.1-1.17.27-1.7V4.97H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.03l2.99-2.33z"
+            fill="#FBBC05"
+          />
+          <path
+            d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.97l2.99 2.33C4.66 5.17 6.65 3.58 9 3.58z"
+            fill="#EA4335"
+          />
+        </svg>
+        {googleLoading ? "Redirecting..." : "Sign in with Google"}
+      </button>
+
+      <p className="text-center text-[#6b6459] text-sm mt-6">
         New here?{" "}
-        <Link href="/register" className="text-indigo-600 hover:text-indigo-700 font-medium">
+        <Link href="/register" className="text-[#1f2a44] font-medium hover:underline">
           Create an account
         </Link>
       </p>
